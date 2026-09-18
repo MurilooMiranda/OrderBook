@@ -76,7 +76,7 @@ public class MatchingEngineSyncTest : MatchingEngineTestBase
 
 public class MatchingEngineAsyncTest : MatchingEngineTestBase
 {
-    protected override IMatchingEngine CreateEngine() => new MatchingEngineAsync();
+    protected override IMatchingEngine CreateEngine() => new MatchingEngineAsyncDoublePhase();
 }
 
 public class ChaosTest
@@ -104,10 +104,10 @@ public class ChaosTest
     public Task ChaosTestSyncSemaphore() => Run(new ExchangeGatewaySyncSemaphore(new MatchingEngineSync()));
 
     [Benchmark]
-    public Task ChaosTestAsync() => Run(new ExchangeGatewayAsync(new MatchingEngineAsync()));
+    public Task ChaosTestAsyncDoublePhase() => Run(new ExchangeGatewayAsync(new MatchingEngineAsyncDoublePhase()));
 
     [Benchmark]
-    public Task ChaosTestAsync_2() => Run(new ExchangeGatewayAsync(new MatchingEngineAsync_2()));
+    public Task ChaosTestAsyncSinglePhase() => Run(new ExchangeGatewayAsync(new MatchingEngineAsyncSinglePhase()));
 
     private async Task Run(ExchangeGatewayBase gateway)
     {

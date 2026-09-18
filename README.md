@@ -60,12 +60,12 @@ Os testes mostraram que a implementação assíncrona que propomos superou a sí
 Para executar os testes utilizando o Benchmark (que suprime o JIT e outras execuções do Visual Studio), basta rodar no terminal (na pasta Benchmark):
 `$: dotnet run -c Release`
 
-| Teste                         | Duração |
-| ----------------------------- | ------- |
-| *ChaosTestAsync_2*            | ~20.19 ms  |
-| *ChaosTestAsync*              | ~22.83 ms  |
-| *ChaosTestSyncLock*           | ~27.62 ms  |
-| *ChaosTestSyncSemaphore*      | ~43.06 ms |
+| Teste                    | Duração   |
+| ------------------------ | --------- |
+| *ChaosTestAsync_2*       | ~20.19 ms |
+| *ChaosTestAsync*         | ~22.83 ms |
+| *ChaosTestSyncLock*      | ~27.62 ms |
+| *ChaosTestSyncSemaphore* | ~43.06 ms |
 
 Obs: A versão 2 de async que foi criada (*ChaosTestAsync_2*) é inspirada na primeira, porém sem a fase 1: Ou seja, ele não tenta lockar apenas a oposta, ele já locka direto ambas e insere (acaba virando completamente síncrono essa parte). Essa nova engine aumentou o desempenho e só prova que, para esse desafio, quanto mais síncrono melhor. Entretanto como é apenas uma variante da versão oficial, não foi tão abordada aqui, servindo apenas para fins comparativos. 
 ## Conclusão
