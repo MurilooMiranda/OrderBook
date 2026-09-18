@@ -31,10 +31,7 @@ namespace Core.MatchingEngine
 
         private readonly PriorityQueue<Order, Priority> askHeap;
         private readonly PriorityQueue<Order, Priority> bidHeap;
-        private readonly SemaphoreSlim askGate = new(1, 1);
-        private readonly SemaphoreSlim bidGate = new(1, 1);
-
-        private readonly Lock bookKeepingGate = new();
+        private readonly SemaphoreSlim gate = new(1, 1);
 
         private readonly List<Trade> trades;
         private readonly Dictionary<Side, int> amountNegotiated;
@@ -59,31 +56,22 @@ namespace Core.MatchingEngine
             Side oppositeSide = newOrder.Side.Opposite();
             List<Trade> executed = [];
             int remaining = newOrder.Quantity;
-         
-            await askGate.WaitAsync().ConfigureAwait(false);
 
+            await gate.WaitAsync().ConfigureAwait(false);
             try
             {
-                await bidGate.WaitAsync().ConfigureAwait(false);
+                remaining = Match(newOrder, remaining, HeapOf(oppositeSide), executed);
 
-                try
+                if (remaining > 0)
                 {
-                    remaining = Match(newOrder, remaining, HeapOf(oppositeSide), executed);
-                    
-                    if (remaining > 0)
-                    {
-                        Rest(newOrder, remaining);
-                    }
-                }
-                finally
-                {
-                    bidGate.Release();
+                    Rest(newOrder, remaining);
                 }
             }
             finally
             {
-                askGate.Release();
+                gate.Release();
             }
+
             return executed;
         }
 
@@ -138,40 +126,23 @@ namespace Core.MatchingEngine
 
         private void Register(Trade trade, Side takerSide, Side makerSide)
         {
-            lock (bookKeepingGate)
-            {
-                trades.Add(trade);
-                amountNegotiated[takerSide] += trade.Quantity;
-                amountNegotiated[makerSide] += trade.Quantity;
-            }
+            trades.Add(trade);
+            amountNegotiated[takerSide] += trade.Quantity;
+            amountNegotiated[makerSide] += trade.Quantity;
         }
 
         public bool ValidarIntegridadeDoBook()
         {
-            askGate.Wait();
-            try{
-                bidGate.Wait();
-                try
-                {
-                    if (askHeap.TryPeek(out _, out Priority bestAsk)
-                        && bidHeap.TryPeek(out _, out Priority bestBid)
-                        && bestBid.Price >= bestAsk.Price)
-                    {
-                        throw new Exception($"Book cruzado: melhor compra ({bestBid.Price}) >= melhor venda ({bestAsk.Price}). ");
-                    }
-                }
-                finally
-                {
-                    bidGate.Release();
-                }
-            }
-            finally
+            gate.Wait();
+            try
             {
-                askGate.Release();
-            }
+                if (askHeap.TryPeek(out _, out Priority bestAsk)
+                    && bidHeap.TryPeek(out _, out Priority bestBid)
+                    && bestBid.Price >= bestAsk.Price)
+                {
+                    throw new Exception($"Book cruzado: melhor compra ({bestBid.Price}) >= melhor venda ({bestAsk.Price}).");
+                }
 
-            lock (bookKeepingGate)
-            {
                 if (amountNegotiated[Side.Buy] != amountNegotiated[Side.Sell])
                 {
                     throw new Exception($"Compras ({amountNegotiated[Side.Buy]}) diferem de vendas ({amountNegotiated[Side.Sell]}).");
@@ -183,6 +154,11 @@ namespace Core.MatchingEngine
                     throw new Exception($"Total Negociado ({amountNegotiated[Side.Buy]}) difere de Trades ({amountTraded}).");
                 }
             }
+            finally
+            {
+                gate.Release();
+            }
+
             return true;
         }
 
@@ -190,32 +166,22 @@ namespace Core.MatchingEngine
         {
             get
             {
-                askGate.Wait();
+                gate.Wait();
                 try
                 {
-                    bidGate.Wait();
-                    try
-                    {
-                        return askHeap.UnorderedItems
-                            .Concat(bidHeap.UnorderedItems)
-                            .Select(entry => entry.Element)
-                            .Where(order => order.Quantity > 0);
-                    }
-                    finally
-                    {
-                        bidGate.Release();
-                    }
+                    return askHeap.UnorderedItems
+                        .Concat(bidHeap.UnorderedItems)
+                        .Select(entry => entry.Element)
+                        .Where(order => order.Quantity > 0);
                 }
                 finally
                 {
-                    askGate.Release();
+                    gate.Release();
                 }
             }
         }
 
         private PriorityQueue<Order, Priority> HeapOf(Side side) => side == Side.Buy ? bidHeap : askHeap;
-
-        private SemaphoreSlim GateOf(Side side) => side == Side.Buy ? bidGate : askGate;
 
         private static bool PriceCheck(Order taker, Order maker) =>
             taker.Side == Side.Buy ? taker.Price >= maker.Price
